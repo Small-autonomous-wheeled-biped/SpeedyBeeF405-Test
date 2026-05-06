@@ -53,3 +53,23 @@ Start GDB in another terminal:
 ```
 
 VS Code can also use `.vscode/launch.json` with the Cortex-Debug extension.
+
+## No-Board Testing
+
+Use the host test target to exercise driver logic without flashing firmware:
+
+```powershell
+cmake -S tests/host -B build-host -G Ninja
+cmake --build build-host
+ctest --test-dir build-host --output-on-failure
+```
+
+The tests link `src/icm42688p.c` and `src/dps310.c` against a fake board I/O
+layer under `tests/host`. They do not validate STM32 register writes or physical
+pin behavior.
+
+Run the same static analysis used in CI with:
+
+```powershell
+cppcheck --enable=warning,style,performance,portability --error-exitcode=1 --std=c11 --inline-suppr -I include src include
+```

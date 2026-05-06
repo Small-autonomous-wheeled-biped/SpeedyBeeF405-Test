@@ -66,12 +66,10 @@ void board_clock_init(void)
 
     const uint32_t pll_m = 8UL;
     const uint32_t pll_n = 336UL;
-    const uint32_t pll_p_bits = 0UL;
     const uint32_t pll_q = 7UL;
 
     RCC->PLLCFGR = pll_m
                  | (pll_n << 6U)
-                 | (pll_p_bits << 16U)
                  | RCC_PLLCFGR_PLLSRC_HSE
                  | (pll_q << 24U);
 

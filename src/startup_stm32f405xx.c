@@ -216,15 +216,17 @@ void Reset_Handler(void)
     __asm volatile("dsb");
     __asm volatile("isb");
 
-    uint32_t *src = &_sidata;
+    const uint32_t *src = &_sidata;
     uint32_t *dst = &_sdata;
+    const uintptr_t data_end = (uintptr_t)&_edata;
 
-    while (dst < &_edata) {
+    while ((uintptr_t)dst < data_end) {
         *dst++ = *src++;
     }
 
     dst = &_sbss;
-    while (dst < &_ebss) {
+    const uintptr_t bss_end = (uintptr_t)&_ebss;
+    while ((uintptr_t)dst < bss_end) {
         *dst++ = 0;
     }
 

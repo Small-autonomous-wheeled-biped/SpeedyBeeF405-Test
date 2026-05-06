@@ -53,6 +53,26 @@ Outputs:
 - `build/speedybee_f405_mini_bringup.hex`
 - `build/speedybee_f405_mini_bringup.map`
 
+## No-Board Testing
+
+The host test project compiles the IMU and barometer drivers for the PC against
+fake `board_*` functions. These tests validate driver transactions and parsing
+logic without flashing or connecting the flight controller.
+
+Configure, build, and run the host tests:
+
+```powershell
+cmake -S tests/host -B build-host -G Ninja
+cmake --build build-host
+ctest --test-dir build-host --output-on-failure
+```
+
+Run static analysis locally:
+
+```powershell
+cppcheck --enable=warning,style,performance,portability --error-exitcode=1 --std=c11 --inline-suppr -I include src include
+```
+
 ## Flashing
 
 This firmware is linked at `0x08000000` and will replace the existing firmware

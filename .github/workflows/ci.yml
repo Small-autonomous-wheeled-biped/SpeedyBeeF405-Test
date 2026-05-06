@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            cmake \
+            ninja-build \
+            gcc-arm-none-eabi \
+            cppcheck
+
+      - name: Build firmware
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.cmake
+          cmake --build build
+
+      - name: Build host tests
+        run: |
+          cmake -S tests/host -B build-host -G Ninja
+          cmake --build build-host
+
+      - name: Run host tests
+        run: ctest --test-dir build-host --output-on-failure
+
+      - name: Run static analysis
+        run: |
+          cppcheck \
+            --enable=warning,style,performance,portability \
+            --error-exitcode=1 \
+            --std=c11 \
+            --inline-suppr \
+            -I include \
+            src include
