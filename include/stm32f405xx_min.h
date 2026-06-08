@@ -15,8 +15,10 @@
 #define GPIOD_BASE              (AHB1PERIPH_BASE + 0x0C00UL)
 #define RCC_BASE                (AHB1PERIPH_BASE + 0x3800UL)
 
+#define TIM2_BASE               (APB1PERIPH_BASE + 0x0000UL)
 #define TIM3_BASE               (APB1PERIPH_BASE + 0x0400UL)
 #define TIM4_BASE               (APB1PERIPH_BASE + 0x0800UL)
+#define TIM5_BASE               (APB1PERIPH_BASE + 0x0C00UL)
 #define I2C1_BASE               (APB1PERIPH_BASE + 0x5400UL)
 #define USART3_BASE             (APB1PERIPH_BASE + 0x4800UL)
 #define PWR_BASE                (APB1PERIPH_BASE + 0x7000UL)
@@ -30,6 +32,7 @@
 
 #define SCS_BASE                0xE000E000UL
 #define SYSTICK_BASE            (SCS_BASE + 0x0010UL)
+#define NVIC_BASE               (SCS_BASE + 0x0100UL)
 #define SCB_CPACR_ADDR          0xE000ED88UL
 
 typedef struct {
@@ -85,6 +88,8 @@ typedef struct {
     __IO uint32_t CALIB;
 } SysTick_TypeDef;
 
+/* Covers both general-purpose (TIM2-5) and advanced (TIM1) timers.
+   TIM1 has RCR/BDTR; TIM2-5 treat those offsets as reserved.        */
 typedef struct {
     __IO uint32_t CR1;
     __IO uint32_t CR2;
@@ -173,6 +178,14 @@ typedef struct {
     __IO uint32_t CDR;
 } ADC_Common_TypeDef;
 
+/* Minimal NVIC interface: ISER/ICER for enabling/disabling interrupts.
+   IRQ 0-31 → ISER[0], IRQ 32-63 → ISER[1], IRQ 64-95 → ISER[2].    */
+typedef struct {
+    __IO uint32_t ISER[8];
+    uint32_t RESERVED0[24];
+    __IO uint32_t ICER[8];
+} NVIC_TypeDef;
+
 #define GPIOA                  ((GPIO_TypeDef *)GPIOA_BASE)
 #define GPIOB                  ((GPIO_TypeDef *)GPIOB_BASE)
 #define GPIOC                  ((GPIO_TypeDef *)GPIOC_BASE)
@@ -181,9 +194,13 @@ typedef struct {
 #define FLASH                  ((FLASH_TypeDef *)FLASH_R_BASE)
 #define PWR                    ((PWR_TypeDef *)PWR_BASE)
 #define SysTick                ((SysTick_TypeDef *)SYSTICK_BASE)
+#define NVIC                   ((NVIC_TypeDef *)NVIC_BASE)
 #define TIM1                   ((TIM_TypeDef *)TIM1_BASE)
+#define TIM2                   ((TIM_TypeDef *)TIM2_BASE)
 #define TIM3                   ((TIM_TypeDef *)TIM3_BASE)
 #define TIM4                   ((TIM_TypeDef *)TIM4_BASE)
+#define TIM5                   ((TIM_TypeDef *)TIM5_BASE)
+#define USART1                 ((USART_TypeDef *)USART1_BASE)
 #define USART3                 ((USART_TypeDef *)USART3_BASE)
 #define I2C1                   ((I2C_TypeDef *)I2C1_BASE)
 #define SPI1                   ((SPI_TypeDef *)SPI1_BASE)
@@ -193,6 +210,12 @@ typedef struct {
 
 #define BIT(n)                 (1UL << (n))
 
+/* NVIC IRQ enable helper.  IRQn is the peripheral IRQ number (0-based). */
+static inline void nvic_enable_irq(uint32_t irqn) {
+    NVIC->ISER[irqn >> 5U] = BIT(irqn & 0x1FU);
+}
+
+/* ---- RCC ---- */
 #define RCC_CR_HSION           BIT(0)
 #define RCC_CR_HSIRDY          BIT(1)
 #define RCC_CR_HSEON           BIT(16)
@@ -213,38 +236,77 @@ typedef struct {
 #define RCC_AHB1ENR_GPIOBEN    BIT(1)
 #define RCC_AHB1ENR_GPIOCEN    BIT(2)
 #define RCC_AHB1ENR_GPIODEN    BIT(3)
+#define RCC_AHB1ENR_DMA1EN     BIT(21)
+#define RCC_AHB1ENR_DMA2EN     BIT(22)
 
+#define RCC_APB1ENR_TIM2EN     BIT(0)
 #define RCC_APB1ENR_TIM3EN     BIT(1)
 #define RCC_APB1ENR_TIM4EN     BIT(2)
+#define RCC_APB1ENR_TIM5EN     BIT(3)
 #define RCC_APB1ENR_USART3EN   BIT(18)
 #define RCC_APB1ENR_I2C1EN     BIT(21)
 #define RCC_APB1ENR_PWREN      BIT(28)
 
 #define RCC_APB2ENR_TIM1EN     BIT(0)
+#define RCC_APB2ENR_USART1EN   BIT(4)
 #define RCC_APB2ENR_ADC1EN     BIT(8)
 #define RCC_APB2ENR_SPI1EN     BIT(12)
 
+/* ---- FLASH ---- */
 #define FLASH_ACR_LATENCY_5WS  5UL
 #define FLASH_ACR_PRFTEN       BIT(8)
 #define FLASH_ACR_ICEN         BIT(9)
 #define FLASH_ACR_DCEN         BIT(10)
 
+/* Flash programming key sequence */
+#define FLASH_KEY1             0x45670123UL
+#define FLASH_KEY2             0xCDEF89ABUL
+
+#define FLASH_SR_BSY           BIT(16)
+#define FLASH_CR_PG            BIT(0)
+#define FLASH_CR_SER           BIT(1)
+#define FLASH_CR_MER           BIT(2)
+#define FLASH_CR_SNB_SHIFT     3U
+#define FLASH_CR_PSIZE_WORD    (2UL << 8)   /* 32-bit parallelism */
+#define FLASH_CR_STRT          BIT(16)
+#define FLASH_CR_LOCK          BIT(31)
+
+/* Config sector: Sector 3, 16 KB at 0x0800_C000.
+   Using a small sector so erases are fast (~250 ms worst-case).         */
+#define CONFIG_FLASH_SECTOR     3U
+#define CONFIG_FLASH_BASE       0x0800C000UL
+
+/* ---- PWR ---- */
 #define PWR_CR_VOS_SCALE1      BIT(14)
 
+/* ---- SysTick ---- */
 #define SYSTICK_CTRL_ENABLE    BIT(0)
 #define SYSTICK_CTRL_TICKINT   BIT(1)
 #define SYSTICK_CTRL_CLKSOURCE BIT(2)
 
-#define USART_SR_TXE           BIT(7)
+/* ---- USART ---- */
+#define USART_SR_RXNE          BIT(5)
 #define USART_SR_TC            BIT(6)
+#define USART_SR_TXE           BIT(7)
 #define USART_CR1_UE           BIT(13)
 #define USART_CR1_TE           BIT(3)
 #define USART_CR1_RE           BIT(2)
+#define USART_CR1_TXEIE        BIT(7)   /* TXE interrupt enable */
+#define USART_CR1_RXNEIE       BIT(5)   /* RXNE interrupt enable */
 
+/* ---- SPI ---- */
 #define SPI_CR1_CPHA           BIT(0)
 #define SPI_CR1_CPOL           BIT(1)
 #define SPI_CR1_MSTR           BIT(2)
-#define SPI_CR1_BR_DIV64       (5UL << 3)
+#define SPI_CR1_BR_MASK        (7UL << 3)
+#define SPI_CR1_BR_DIV2        (0UL << 3)   /* fPCLK/2   = 42 MHz on APB2 */
+#define SPI_CR1_BR_DIV4        (1UL << 3)   /* fPCLK/4   = 21 MHz */
+#define SPI_CR1_BR_DIV8        (2UL << 3)   /* fPCLK/8   = 10.5 MHz */
+#define SPI_CR1_BR_DIV16       (3UL << 3)   /* fPCLK/16  = 5.25 MHz */
+#define SPI_CR1_BR_DIV32       (4UL << 3)   /* fPCLK/32  = 2.625 MHz */
+#define SPI_CR1_BR_DIV64       (5UL << 3)   /* fPCLK/64  = 1.3125 MHz */
+#define SPI_CR1_BR_DIV128      (6UL << 3)   /* fPCLK/128 = 0.656 MHz */
+#define SPI_CR1_BR_DIV256      (7UL << 3)   /* fPCLK/256 = 0.328 MHz */
 #define SPI_CR1_SPE            BIT(6)
 #define SPI_CR1_SSI            BIT(8)
 #define SPI_CR1_SSM            BIT(9)
@@ -252,6 +314,7 @@ typedef struct {
 #define SPI_SR_TXE             BIT(1)
 #define SPI_SR_BSY             BIT(7)
 
+/* ---- I2C ---- */
 #define I2C_CR1_PE             BIT(0)
 #define I2C_CR1_START          BIT(8)
 #define I2C_CR1_STOP           BIT(9)
@@ -265,11 +328,20 @@ typedef struct {
 #define I2C_SR1_AF             BIT(10)
 #define I2C_SR2_BUSY           BIT(1)
 
+/* ---- ADC ---- */
 #define ADC_SR_EOC             BIT(1)
 #define ADC_CR2_ADON           BIT(0)
 #define ADC_CR2_SWSTART        BIT(30)
 
+/* ---- TIM ---- */
 #define TIM_CR1_CEN            BIT(0)
 #define TIM_CR1_ARPE           BIT(7)
+#define TIM_CR1_URS            BIT(2)
+#define TIM_DIER_UIE           BIT(0)
+#define TIM_SR_UIF             BIT(0)
 #define TIM_EGR_UG             BIT(0)
 #define TIM_BDTR_MOE           BIT(15)
+
+/* IRQ numbers (STM32F405 vector table position minus 16) */
+#define USART1_IRQn            37U
+#define TIM5_IRQn              50U
