@@ -13,7 +13,11 @@
 #include <math.h>
 #include <string.h>
 
-#define MOTOR4_TEST  1   /* set 0 to disable motor-4 spin test */
+#define MOTOR4_TEST  0   /* bench-only motor spin test; DO NOT leave enabled —
+                             it arms an ESC and spins motor 4 forever before
+                             any sensor init, and main() never returns while
+                             it runs. Set to 1 only for a deliberate, isolated
+                             bench test with props off. */
 
 /*
  * SpeedyBee F405 Mini — High-rate IMU/attitude sensor module firmware.
@@ -70,6 +74,8 @@ static float g_accel_cal[3];
 static float g_gyro_filt[3];
 static float g_accel_filt[3];
 static uint32_t g_last_imu_read_us;
+static float g_last_temperature_deg_c = 0.0f;  /* last IMU temperature reading;
+                                                   fed into the fast packet */
 
 /* Stationarity detection for auto gyro-bias calibration.
    Simple threshold: all gyro axes < STILL_GYRO_THRESH and
@@ -141,6 +147,7 @@ static void run_imu_task(uint32_t now_us)
         icm42688p_sample_t tmp_s;
         if (icm42688p_read_sample(&tmp_s)) {
             phys.temperature_deg_c = (float)tmp_s.temperature_raw / 132.48f + 25.0f;
+            g_last_temperature_deg_c = phys.temperature_deg_c;
         }
     }
 
@@ -217,11 +224,8 @@ static void run_fast_packet_task(uint32_t now_us, uint32_t last_imu_read_us)
                        roll_rad, pitch_rad, yaw_rad,
                        g_gyro_filt, g_accel_filt,
                        gravity,
-                       g_mahony.q[0],  /* temperature via phys.temperature_deg_c below */
+                       g_last_temperature_deg_c,
                        health_get_flags(&g_health));
-
-    /* Overwrite temperature with the last known value. */
-    /* (fast_packet_encode uses the 12th float parameter as temperature) */
 
     const bool sent = board_uart1_write(fast_packet_bytes(&g_fast_pkt),
                                         sizeof(g_fast_pkt));

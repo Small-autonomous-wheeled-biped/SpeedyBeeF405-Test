@@ -1,7 +1,0 @@
-C:/Users/marcu/Documents/GitHub/SpeedyBeeF405-Test/build-host-new/CMakeFiles/test_drivers.dir
-C:/Users/marcu/Documents/GitHub/SpeedyBeeF405-Test/build-host-new/CMakeFiles/test_crc.dir
-C:/Users/marcu/Documents/GitHub/SpeedyBeeF405-Test/build-host-new/CMakeFiles/test_mahony.dir
-C:/Users/marcu/Documents/GitHub/SpeedyBeeF405-Test/build-host-new/CMakeFiles/test_packets.dir
-C:/Users/marcu/Documents/GitHub/SpeedyBeeF405-Test/build-host-new/CMakeFiles/test.dir
-C:/Users/marcu/Documents/GitHub/SpeedyBeeF405-Test/build-host-new/CMakeFiles/edit_cache.dir
-C:/Users/marcu/Documents/GitHub/SpeedyBeeF405-Test/build-host-new/CMakeFiles/rebuild_cache.dir
