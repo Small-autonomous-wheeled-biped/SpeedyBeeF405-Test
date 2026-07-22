@@ -10,7 +10,10 @@
 #include "fast_packet.h"
 #include "log_packet.h"
 
+#include <math.h>
 #include <string.h>
+
+#define MOTOR4_TEST  1   /* set 0 to disable motor-4 spin test */
 
 /*
  * SpeedyBee F405 Mini — High-rate IMU/attitude sensor module firmware.
@@ -81,27 +84,19 @@ static bool   g_baro_ok = false;
 
 /* ---- Helpers ---- */
 
-static float absf(float x) { return (x < 0.0f) ? -x : x; }
 
 static bool is_stationary(const float gyro_rad_s[3],
                            const float accel_m_s2[3])
 {
     for (uint8_t i = 0; i < 3U; i++) {
-        if (absf(gyro_rad_s[i]) > STILL_GYRO_THRESH_RAD_S) {
+        if (fabsf(gyro_rad_s[i]) > STILL_GYRO_THRESH_RAD_S) {
             return false;
         }
     }
     float a2 = accel_m_s2[0]*accel_m_s2[0]
               + accel_m_s2[1]*accel_m_s2[1]
               + accel_m_s2[2]*accel_m_s2[2];
-    float a = 0.0f;
-    if (a2 > 0.0f) {
-        a = a2;
-        /* Newton-Raphson approximate sqrt (2 iterations, good enough). */
-        float s = a2 * 0.5f;
-        s = s - (s * s - a2) / (2.0f * s);
-        a = s;
-    }
+    const float a = sqrtf(a2);
     const float g = 9.80665f;
     return (a >= STILL_ACCEL_NORM_LO * g) && (a <= STILL_ACCEL_NORM_HI * g);
 }
@@ -301,6 +296,22 @@ static void run_baro_task(void)
     }
 }
 
+/* ---- Motor 4 continuous forward run ---- */
+
+#if MOTOR4_TEST
+static void motor4_run_forever(void)
+{
+    /* ESC arming: hold throttle-low for 3 s */
+    board_pwm_set_us(4, 1000);
+    uint32_t t = board_millis();
+    while (board_millis() - t < 3000U) {}
+
+    /* Run motor 4 forward indefinitely */
+    board_pwm_set_us(4, 1200);
+    for (;;) {}
+}
+#endif
+
 /* ---- Main ---- */
 
 int main(void)
@@ -317,6 +328,10 @@ int main(void)
     board_i2c1_init();
     board_adc1_init();
     board_pwm_init();
+
+#if MOTOR4_TEST
+    motor4_run_forever();
+#endif
 
     board_log_line("");
     board_log_line("SpeedyBee F405 Mini — IMU attitude module v1");
